@@ -76,6 +76,33 @@ defmodule Aplyid.MockServer do
   - `PUT /api/v2/resend_text/:id` - Resend SMS notification
   - `POST /mock/simulate/complete/:id` - Simulate completion (mock only)
   - `GET /health` - Health check endpoint
+
+  ## Verification UI
+
+  The mock server includes a web-based verification flow at `/l/:id`. When a
+  transaction is created without a `contact_phone`, the response includes a
+  `start_process_url` that points to this flow.
+
+  The verification URL is generated using the configured `base_url`:
+
+      config :aplyid, :mock_server,
+        enabled: true,
+        embedded: true,
+        base_url: "http://localhost:4000/aplyid-mock",
+        repo: MyApp.Repo
+
+  When mounted in a Phoenix app at `/aplyid-mock`, the verification URL will be
+  `http://localhost:4000/aplyid-mock/l/:id`. The flow includes:
+
+  1. Privacy Consent
+  2. Photo ID Capture
+  3. ID Data Review
+  4. ID Details Confirmation
+  5. Face Verification
+  6. Completion
+
+  Upon completing the flow, the transaction is marked as completed with mock
+  verification data and any configured webhooks are triggered.
   """
 
   @doc """

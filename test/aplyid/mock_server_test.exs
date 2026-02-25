@@ -224,6 +224,233 @@ defmodule Aplyid.MockServerTest do
     end
   end
 
+  describe "verification flow" do
+    setup do
+      {:ok, transaction} = create_transaction()
+      {:ok, transaction: transaction}
+    end
+
+    test "GET /l/:id redirects to consent for created transaction", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}")
+        |> call()
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/l/#{txn.id}/consent"]
+    end
+
+    test "GET /l/:id shows already completed for completed transaction", %{transaction: txn} do
+      {:ok, _} = State.complete_transaction(txn.id)
+
+      conn =
+        conn(:get, "/l/#{txn.id}")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Already Verified"
+    end
+
+    test "GET /l/:id shows error for unknown transaction" do
+      conn =
+        conn(:get, "/l/unknown-id")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Transaction not found"
+    end
+
+    test "GET /l/:id/consent renders consent screen", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}/consent")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Privacy Consent"
+      assert conn.resp_body =~ "APLYiD"
+    end
+
+    test "POST /l/:id/consent redirects to capture", %{transaction: txn} do
+      conn =
+        conn(:post, "/l/#{txn.id}/consent", "consent=on")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/l/#{txn.id}/capture"]
+    end
+
+    test "GET /l/:id/capture renders capture screen", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}/capture")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Capture your Photo ID"
+    end
+
+    test "POST /l/:id/capture redirects to reviewing", %{transaction: txn} do
+      conn =
+        conn(:post, "/l/#{txn.id}/capture")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/l/#{txn.id}/reviewing"]
+    end
+
+    test "GET /l/:id/reviewing renders loading screen", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}/reviewing")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Reviewing your ID Data"
+      assert conn.resp_body =~ "setTimeout"
+    end
+
+    test "GET /l/:id/details renders details screen", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}/details")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Check your ID details"
+      assert conn.resp_body =~ "JOHN"
+      assert conn.resp_body =~ "SMITH"
+    end
+
+    test "POST /l/:id/details redirects to face", %{transaction: txn} do
+      conn =
+        conn(:post, "/l/#{txn.id}/details", "consent=on")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/l/#{txn.id}/face"]
+    end
+
+    test "GET /l/:id/face renders face verification screen", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}/face")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Face Verification"
+    end
+
+    test "POST /l/:id/face completes transaction and redirects to complete", %{transaction: txn} do
+      conn =
+        conn(:post, "/l/#{txn.id}/face")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/l/#{txn.id}/complete"]
+
+      # Verify transaction is now completed
+      {:ok, completed} = State.get_transaction(txn.id)
+      assert completed.status == :completed
+      assert completed.verification["overall_result"] == "PASS"
+    end
+
+    test "GET /l/:id/complete renders complete screen", %{transaction: txn} do
+      {:ok, _} = State.complete_transaction(txn.id)
+
+      conn =
+        conn(:get, "/l/#{txn.id}/complete")
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "Verification complete"
+    end
+
+    test "full verification flow completes successfully", %{transaction: txn} do
+      # Step 1: Start -> redirects to consent
+      conn = conn(:get, "/l/#{txn.id}") |> call()
+      assert conn.status == 302
+
+      # Step 2: Consent screen
+      conn = conn(:get, "/l/#{txn.id}/consent") |> call()
+      assert conn.status == 200
+      assert conn.resp_body =~ "Privacy Consent"
+
+      # Step 3: Submit consent -> capture
+      conn =
+        conn(:post, "/l/#{txn.id}/consent", "consent=on")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+
+      # Step 4: Capture screen
+      conn = conn(:get, "/l/#{txn.id}/capture") |> call()
+      assert conn.status == 200
+
+      # Step 5: Submit capture -> reviewing
+      conn =
+        conn(:post, "/l/#{txn.id}/capture")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+
+      # Step 6: Details screen
+      conn = conn(:get, "/l/#{txn.id}/details") |> call()
+      assert conn.status == 200
+      assert conn.resp_body =~ "Check your ID details"
+
+      # Step 7: Submit details -> face
+      conn =
+        conn(:post, "/l/#{txn.id}/details", "consent=on")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+
+      # Step 8: Face screen
+      conn = conn(:get, "/l/#{txn.id}/face") |> call()
+      assert conn.status == 200
+
+      # Step 9: Submit face -> completes and redirects
+      conn =
+        conn(:post, "/l/#{txn.id}/face")
+        |> put_req_header("content-type", "application/x-www-form-urlencoded")
+        |> call()
+
+      assert conn.status == 302
+
+      # Step 10: Complete screen
+      conn = conn(:get, "/l/#{txn.id}/complete") |> call()
+      assert conn.status == 200
+      assert conn.resp_body =~ "Verification complete"
+
+      # Verify final state
+      {:ok, completed} = State.get_transaction(txn.id)
+      assert completed.status == :completed
+      assert completed.verification != nil
+    end
+
+    test "verification screens use path prefix when mounted", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}/consent")
+        |> Map.put(:script_name, ["aplyid-mock"])
+        |> call()
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "/aplyid-mock/l/#{txn.id}/consent"
+    end
+
+    test "redirects include path prefix when mounted", %{transaction: txn} do
+      conn =
+        conn(:get, "/l/#{txn.id}")
+        |> Map.put(:script_name, ["aplyid-mock"])
+        |> call()
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/aplyid-mock/l/#{txn.id}/consent"]
+    end
+  end
+
   describe "State.clear_all/0" do
     test "clears all transactions" do
       {:ok, _} = create_transaction()

@@ -4,6 +4,7 @@ defmodule Aplyid.MockServer.Router do
 
   Routes requests to appropriate handlers for:
   - Verification API endpoints (send_text, resend_text)
+  - Verification flow UI (consent, capture, details, face)
   - Simulation endpoints (for testing)
   """
 
@@ -11,6 +12,7 @@ defmodule Aplyid.MockServer.Router do
 
   alias Aplyid.MockServer.Handlers.Verifications
   alias Aplyid.MockServer.Handlers.Simulation
+  alias Aplyid.MockServer.Handlers.Verification
   alias Aplyid.MockServer.Responses
 
   plug(Plug.Logger, log: :debug)
@@ -36,6 +38,51 @@ defmodule Aplyid.MockServer.Router do
   # Simulation endpoints (for testing/development)
   post "/mock/simulate/complete/:id" do
     Simulation.complete(conn, id)
+  end
+
+  # Verification flow UI endpoints
+  get "/l/:id" do
+    Verification.start(conn, id)
+  end
+
+  get "/l/:id/consent" do
+    Verification.consent(conn, id)
+  end
+
+  post "/l/:id/consent" do
+    Verification.submit_consent(conn, id)
+  end
+
+  get "/l/:id/capture" do
+    Verification.capture(conn, id)
+  end
+
+  post "/l/:id/capture" do
+    Verification.submit_capture(conn, id)
+  end
+
+  get "/l/:id/reviewing" do
+    Verification.reviewing(conn, id)
+  end
+
+  get "/l/:id/details" do
+    Verification.details(conn, id)
+  end
+
+  post "/l/:id/details" do
+    Verification.submit_details(conn, id)
+  end
+
+  get "/l/:id/face" do
+    Verification.face(conn, id)
+  end
+
+  post "/l/:id/face" do
+    Verification.submit_face(conn, id)
+  end
+
+  get "/l/:id/complete" do
+    Verification.complete(conn, id)
   end
 
   # Health check endpoint
