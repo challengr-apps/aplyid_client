@@ -30,7 +30,10 @@ defmodule Aplyid.MixProject do
     [
       {:req, "~> 0.5.0"},
       {:jason, "~> 1.4"},
-      {:plug, "~> 1.14", optional: true}
+      {:plug, "~> 1.14", optional: true},
+      {:bandit, "~> 1.0", optional: true},
+      {:ecto_sql, "~> 3.10", optional: true},
+      {:postgrex, ">= 0.0.0", only: :test}
     ]
   end
 end
