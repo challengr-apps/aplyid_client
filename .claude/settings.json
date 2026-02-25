@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/col/Projects/azupay/**)",
+      "WebFetch(domain:docs.aplyid.com)"
+    ]
+  }
+}

@@ -1,21 +1,8 @@
 # Aplyid
 
-**TODO: Add description**
+Elixir API client for APLYiD.
 
-## Installation
+## APPLYiD Developer API
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `aplyid` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:aplyid, "~> 0.1.0"}
-  ]
-end
-```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/aplyid>.
+Documentation for the APPLYiD Developer API can be found [here](https://docs.aplyid.com/).
 

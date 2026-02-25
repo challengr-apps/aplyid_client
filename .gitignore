@@ -21,3 +21,4 @@ aplyid-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+PROMPTS.md
