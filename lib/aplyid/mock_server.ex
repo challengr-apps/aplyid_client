@@ -142,8 +142,12 @@ defmodule Aplyid.MockServer do
     config = Application.get_env(:aplyid, :mock_server, [])
 
     case Keyword.get(config, :base_url) do
-      nil -> "http://localhost"
-      url when is_binary(url) -> String.trim_trailing(url, "/")
+      nil ->
+        port = Keyword.get(config, :port, 4000)
+        "http://localhost:#{port}"
+
+      url when is_binary(url) ->
+        String.trim_trailing(url, "/")
     end
   end
 

@@ -2,10 +2,9 @@ defmodule Aplyid.Webhook.Plug do
   @moduledoc """
   Plug for receiving APLYiD webhook notifications.
 
-  Parses the JSON payload, extracts the event type from the `"event"` field,
-  extracts the `Authorization` header, and delegates to your handler module.
-  Authentication is handled by the handler — see `Aplyid.Webhook.Handler`
-  for details.
+  Parses the JSON payload, verifies authorization via the handler's
+  `verify_authorization/1` callback, then delegates to `handle_event/3`.
+  See `Aplyid.Webhook.Handler` for details.
 
   ## Options
 
@@ -48,18 +47,20 @@ defmodule Aplyid.Webhook.Plug do
         authorization: authorization
       }
 
-      case config.handler.handle_event(event_type, payload, context) do
-        :ok ->
-          conn |> send_resp(200, "") |> halt()
+      with :ok <- config.handler.verify_authorization(context) do
+        case config.handler.handle_event(event_type, payload, context) do
+          :ok ->
+            conn |> send_resp(200, "") |> halt()
 
+          {:error, :unauthorized} ->
+            unauthorized(conn)
+
+          {:error, _reason} ->
+            conn |> send_resp(500, "") |> halt()
+        end
+      else
         {:error, :unauthorized} ->
-          conn
-          |> put_resp_content_type("application/json")
-          |> send_resp(401, Jason.encode!(%{"error" => "unauthorized"}))
-          |> halt()
-
-        {:error, _reason} ->
-          conn |> send_resp(500, "") |> halt()
+          unauthorized(conn)
       end
     else
       {:error, _reason} ->
@@ -74,6 +75,13 @@ defmodule Aplyid.Webhook.Plug do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(405, Jason.encode!(%{"error" => "method_not_allowed"}))
+    |> halt()
+  end
+
+  defp unauthorized(conn) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(401, Jason.encode!(%{"error" => "unauthorized"}))
     |> halt()
   end
 

@@ -64,7 +64,7 @@ defmodule Aplyid.MockServerTest do
       assert conn.status == 200
       body = Jason.decode!(conn.resp_body)
       assert body["transaction_id"]
-      assert body["start_process_url"]
+      assert body["start_process_url"] =~ "http://localhost:4000/l/"
     end
 
     test "omits start_process_url when contact_phone is provided" do
@@ -79,6 +79,21 @@ defmodule Aplyid.MockServerTest do
       body = Jason.decode!(conn.resp_body)
       assert body["transaction_id"]
       refute body["start_process_url"]
+    end
+
+    test "returns start_process_url when communication_method is link" do
+      conn =
+        authed_conn(:post, "/api/v2/send_text", %{
+          "reference" => "test-ref-123",
+          "contact_phone" => "+61400000000",
+          "communication_method" => "link"
+        })
+        |> call()
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["transaction_id"]
+      assert body["start_process_url"] =~ "http://localhost:4000/l/"
     end
 
     test "returns validation error with missing reference" do

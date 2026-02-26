@@ -87,11 +87,11 @@ forward "/webhooks/aplyid/uat", Aplyid.Webhook.Plug,
   handler: MyApp.AplyidWebhookHandler
 ```
 
-Implement the handler behaviour:
+Implement the handler with `use Aplyid.Webhook.Handler`:
 
 ```elixir
 defmodule MyApp.AplyidWebhookHandler do
-  @behaviour Aplyid.Webhook.Handler
+  use Aplyid.Webhook.Handler
 
   @impl true
   def handle_event("completed", payload, _context) do
@@ -104,6 +104,43 @@ end
 ```
 
 Event types: `"created"`, `"completed"`, `"updated"`, `"archived"`, `"error"`, `"pending"`, `"test"`.
+
+#### Webhook Authentication
+
+Authorization is verified automatically before `handle_event/3` is called. Configure `webhook_auth` in your environment config to match the token APLYiD sends:
+
+```elixir
+config :aplyid,
+  environments: [
+    uat: [
+      base_url: "https://integration.aplyid.com",
+      api_key: System.get_env("APLYID_UAT_API_KEY"),
+      api_secret: System.get_env("APLYID_UAT_API_SECRET"),
+      webhook_auth: System.get_env("APLYID_UAT_WEBHOOK_AUTH")
+    ]
+  ]
+```
+
+If `webhook_auth` is not configured, all requests are allowed. If configured, the plug compares the incoming `Authorization` header and returns 401 on mismatch.
+
+To use custom auth logic, override `verify_authorization/1` in your handler:
+
+```elixir
+defmodule MyApp.AplyidWebhookHandler do
+  use Aplyid.Webhook.Handler
+
+  @impl true
+  def verify_authorization(%{authorization: auth}) do
+    if MyApp.Auth.valid_webhook_token?(auth), do: :ok, else: {:error, :unauthorized}
+  end
+
+  @impl true
+  def handle_event("completed", payload, _context) do
+    # ...
+    :ok
+  end
+end
+```
 
 ### Error Handling
 
@@ -168,7 +205,7 @@ Configuration options:
 |--------|-------------|---------|
 | `enabled` | Enable the mock server | `false` |
 | `embedded` | Skip starting Bandit (use Phoenix instead) | `false` |
-| `base_url` | Base URL for verification links | `"http://localhost"` |
+| `base_url` | Base URL for verification links | `"http://localhost:4000"` |
 | `repo` | Ecto repo for PostgreSQL persistence | Required |
 | `webhook_url` | URL to send webhook notifications to | `nil` |
 | `webhook_auth` | Authorization header value for webhooks | `nil` |
@@ -257,12 +294,13 @@ POST /mock/simulate/complete/:transaction_id
 config :aplyid, :mock_server,
   enabled: true,
   embedded: true,
-  repo: MyApp.Repo
+  repo: MyApp.Repo,
+  base_url: "http://localhost:4000"
 
 config :aplyid,
   environments: [
     uat: [
-      base_url: "http://localhost",
+      base_url: "http://localhost:4000",
       api_key: "test_key",
       api_secret: "test_secret"
     ]

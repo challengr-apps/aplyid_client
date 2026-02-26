@@ -4,7 +4,7 @@ defmodule Aplyid.Webhook.PlugTest do
   import Plug.Conn
 
   defmodule TestHandler do
-    @behaviour Aplyid.Webhook.Handler
+    use Aplyid.Webhook.Handler
 
     @impl true
     def handle_event(event_type, payload, context) do
@@ -14,7 +14,7 @@ defmodule Aplyid.Webhook.PlugTest do
   end
 
   defmodule UnauthorizedHandler do
-    @behaviour Aplyid.Webhook.Handler
+    use Aplyid.Webhook.Handler
 
     @impl true
     def handle_event(_event_type, _payload, _context) do
@@ -23,11 +23,30 @@ defmodule Aplyid.Webhook.PlugTest do
   end
 
   defmodule ErrorHandler do
-    @behaviour Aplyid.Webhook.Handler
+    use Aplyid.Webhook.Handler
 
     @impl true
     def handle_event(_event_type, _payload, _context) do
       {:error, :processing_failed}
+    end
+  end
+
+  defmodule CustomAuthHandler do
+    use Aplyid.Webhook.Handler
+
+    @impl true
+    def verify_authorization(%{authorization: "Bearer custom-secret"}) do
+      :ok
+    end
+
+    def verify_authorization(_context) do
+      {:error, :unauthorized}
+    end
+
+    @impl true
+    def handle_event(event_type, payload, context) do
+      send(self(), {:webhook_received, event_type, payload, context})
+      :ok
     end
   end
 
@@ -198,6 +217,133 @@ defmodule Aplyid.Webhook.PlugTest do
     end
   end
 
+  describe "authorization" do
+    test "allows request when no webhook_auth is configured" do
+      opts =
+        Aplyid.Webhook.Plug.init(
+          environment: :uat,
+          handler: TestHandler
+        )
+
+      payload = %{"event" => "completed", "transaction_id" => "txn-123"}
+
+      conn =
+        conn(:post, "/", Jason.encode!(payload))
+        |> put_req_header("content-type", "application/json")
+        |> Aplyid.Webhook.Plug.call(opts)
+
+      assert conn.status == 200
+    end
+
+    test "allows request when webhook_auth matches authorization header" do
+      # Temporarily set webhook_auth in the uat environment config
+      original = Application.get_env(:aplyid, :environments)
+
+      try do
+        put_webhook_auth(:uat, "Bearer test-webhook-secret")
+
+        opts =
+          Aplyid.Webhook.Plug.init(
+            environment: :uat,
+            handler: TestHandler
+          )
+
+        payload = %{"event" => "completed", "transaction_id" => "txn-123"}
+
+        conn =
+          conn(:post, "/", Jason.encode!(payload))
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("authorization", "Bearer test-webhook-secret")
+          |> Aplyid.Webhook.Plug.call(opts)
+
+        assert conn.status == 200
+      after
+        Application.put_env(:aplyid, :environments, original)
+      end
+    end
+
+    test "returns 401 when webhook_auth is configured but header is missing" do
+      original = Application.get_env(:aplyid, :environments)
+
+      try do
+        put_webhook_auth(:uat, "Bearer test-webhook-secret")
+
+        opts =
+          Aplyid.Webhook.Plug.init(
+            environment: :uat,
+            handler: TestHandler
+          )
+
+        payload = %{"event" => "completed", "transaction_id" => "txn-123"}
+
+        conn =
+          conn(:post, "/", Jason.encode!(payload))
+          |> put_req_header("content-type", "application/json")
+          |> Aplyid.Webhook.Plug.call(opts)
+
+        assert conn.status == 401
+        assert Jason.decode!(conn.resp_body) == %{"error" => "unauthorized"}
+      after
+        Application.put_env(:aplyid, :environments, original)
+      end
+    end
+
+    test "returns 401 when webhook_auth is configured but header is wrong" do
+      original = Application.get_env(:aplyid, :environments)
+
+      try do
+        put_webhook_auth(:uat, "Bearer test-webhook-secret")
+
+        opts =
+          Aplyid.Webhook.Plug.init(
+            environment: :uat,
+            handler: TestHandler
+          )
+
+        payload = %{"event" => "completed", "transaction_id" => "txn-123"}
+
+        conn =
+          conn(:post, "/", Jason.encode!(payload))
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("authorization", "Bearer wrong-secret")
+          |> Aplyid.Webhook.Plug.call(opts)
+
+        assert conn.status == 401
+        assert Jason.decode!(conn.resp_body) == %{"error" => "unauthorized"}
+      after
+        Application.put_env(:aplyid, :environments, original)
+      end
+    end
+
+    test "handler can override verify_authorization" do
+      opts =
+        Aplyid.Webhook.Plug.init(
+          environment: :uat,
+          handler: CustomAuthHandler
+        )
+
+      payload = %{"event" => "completed", "transaction_id" => "txn-123"}
+
+      # Correct custom secret → 200
+      conn =
+        conn(:post, "/", Jason.encode!(payload))
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer custom-secret")
+        |> Aplyid.Webhook.Plug.call(opts)
+
+      assert conn.status == 200
+
+      # Wrong secret → 401
+      conn =
+        conn(:post, "/", Jason.encode!(payload))
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("authorization", "Bearer wrong")
+        |> Aplyid.Webhook.Plug.call(opts)
+
+      assert conn.status == 401
+    end
+  end
+
   describe "handler errors" do
     test "returns 401 when handler returns {:error, :unauthorized}" do
       opts =
@@ -281,5 +427,14 @@ defmodule Aplyid.Webhook.PlugTest do
 
       assert conn.status == 400
     end
+  end
+
+  # Helper to set webhook_auth in the environment config
+  defp put_webhook_auth(env, value) do
+    envs = Application.get_env(:aplyid, :environments, [])
+    env_config = Keyword.get(envs, env, [])
+    updated_config = Keyword.put(env_config, :webhook_auth, value)
+    updated_envs = Keyword.put(envs, env, updated_config)
+    Application.put_env(:aplyid, :environments, updated_envs)
   end
 end

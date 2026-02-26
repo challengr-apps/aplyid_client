@@ -2,40 +2,45 @@ defmodule Aplyid.Webhook.Handler do
   @moduledoc """
   Behaviour for handling APLYiD webhook events.
 
-  Implement `handle_event/3` to process incoming webhook notifications.
-  The event type is extracted from the `"event"` field in the JSON payload.
-
-  Your handler is responsible for verifying the `Authorization` header if
-  your webhook endpoint is configured with authentication. Return
-  `{:error, :unauthorized}` to reject the request with a 401 response.
+  Use `use Aplyid.Webhook.Handler` to get default implementations including
+  authorization verification from environment config. Override callbacks as needed.
 
   ## Example
 
       defmodule MyApp.AplyidWebhookHandler do
-        @behaviour Aplyid.Webhook.Handler
+        use Aplyid.Webhook.Handler
 
         @impl true
-        def handle_event("completed", payload, context) do
-          with :ok <- verify_authorization(context) do
-            transaction_id = payload["transaction_id"]
-            # Process completed verification
-            :ok
-          end
-        end
-
-        def handle_event(_type, _payload, _context) do
-          # Gracefully ignore unknown event types
+        def handle_event("completed", payload, _context) do
+          transaction_id = payload["transaction_id"]
+          # Process completed verification
           :ok
         end
 
-        defp verify_authorization(%{authorization: auth}) do
-          expected = Application.get_env(:my_app, :aplyid_webhook_secret)
+        def handle_event(_type, _payload, _context), do: :ok
+      end
 
-          if Plug.Crypto.secure_compare(auth || "", expected || "") do
+  ## Custom Authorization
+
+  The default `verify_authorization/1` checks the `Authorization` header against
+  the `webhook_auth` value in the environment config. Override it for custom logic:
+
+      defmodule MyApp.AplyidWebhookHandler do
+        use Aplyid.Webhook.Handler
+
+        @impl true
+        def verify_authorization(%{authorization: auth}) do
+          if MyApp.Auth.valid_webhook_token?(auth) do
             :ok
           else
             {:error, :unauthorized}
           end
+        end
+
+        @impl true
+        def handle_event("completed", payload, _context) do
+          # ...
+          :ok
         end
       end
 
@@ -69,4 +74,51 @@ defmodule Aplyid.Webhook.Handler do
   """
   @callback handle_event(event_type :: String.t(), payload :: map(), context :: map()) ::
               :ok | {:error, :unauthorized} | {:error, term()}
+
+  @doc """
+  Called before `handle_event/3` to verify the request's authorization.
+
+  The default implementation checks the `Authorization` header against the
+  `webhook_auth` value in the environment config. If no `webhook_auth` is
+  configured, all requests are allowed.
+
+  Return `:ok` to allow the request or `{:error, :unauthorized}` to reject it.
+  """
+  @callback verify_authorization(context :: map()) ::
+              :ok | {:error, :unauthorized}
+
+  defmacro __using__(_opts) do
+    quote do
+      @behaviour Aplyid.Webhook.Handler
+
+      @impl true
+      def verify_authorization(context) do
+        Aplyid.Webhook.Handler.default_verify_authorization(context)
+      end
+
+      @impl true
+      def handle_event(_type, _payload, _context), do: :ok
+
+      defoverridable verify_authorization: 1, handle_event: 3
+    end
+  end
+
+  @doc false
+  def default_verify_authorization(%{environment: env, authorization: auth}) do
+    env_config =
+      Application.get_env(:aplyid, :environments, [])
+      |> Keyword.get(env, [])
+
+    case Keyword.get(env_config, :webhook_auth) do
+      nil ->
+        :ok
+
+      expected ->
+        if Plug.Crypto.secure_compare(auth || "", expected) do
+          :ok
+        else
+          {:error, :unauthorized}
+        end
+    end
+  end
 end

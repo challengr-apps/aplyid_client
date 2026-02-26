@@ -25,10 +25,10 @@ defmodule Aplyid.MockServer.Responses do
     body = %{"transaction_id" => transaction.id}
 
     body =
-      if transaction.contact_phone do
-        body
-      else
+      if is_nil(transaction.contact_phone) or transaction.communication_method == "link" do
         Map.put(body, "start_process_url", transaction.start_process_url)
+      else
+        body
       end
 
     json(conn, 200, body)

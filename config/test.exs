@@ -17,7 +17,8 @@ config :aplyid,
 config :aplyid, :mock_server,
   enabled: true,
   embedded: true,
-  repo: Aplyid.TestRepo
+  repo: Aplyid.TestRepo,
+  base_url: "http://localhost:4000"
 
 config :aplyid, Aplyid.TestRepo,
   username: "postgres",
