@@ -75,10 +75,19 @@ if Code.ensure_loaded?(Ecto) do
     @doc """
     Converts an Ecto schema struct to the internal Transaction struct.
     """
+    @valid_statuses %{
+      "created" => :created,
+      "completed" => :completed,
+      "updated" => :updated,
+      "archived" => :archived,
+      "error" => :error,
+      "pending" => :pending
+    }
+
     def to_transaction(%__MODULE__{} = schema) do
       %Aplyid.MockServer.Transaction{
         id: schema.id,
-        status: String.to_existing_atom(schema.status),
+        status: Map.fetch!(@valid_statuses, schema.status),
         reference: schema.reference,
         email: schema.email,
         contact_phone: schema.contact_phone,

@@ -1,6 +1,10 @@
 defmodule Aplyid.MockServer.Responses do
   @moduledoc """
   Standardized response builders for the mock APLYiD API.
+
+  All mock server handlers delegate to this module for consistent
+  JSON response formatting, including success responses, error
+  responses, and webhook payload construction.
   """
 
   import Plug.Conn

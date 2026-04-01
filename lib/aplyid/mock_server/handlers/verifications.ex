@@ -1,6 +1,10 @@
 defmodule Aplyid.MockServer.Handlers.Verifications do
   @moduledoc """
-  Handles verification-related endpoints for the mock server.
+  Handles verification API endpoints for the mock server.
+
+  Implements the APLYiD `/api/v2/send_text` and `/api/v2/resend_text/:id`
+  endpoints with authentication checks via `aply-api-key` and `aply-secret`
+  request headers.
   """
 
   alias Aplyid.MockServer.State
@@ -16,8 +20,13 @@ defmodule Aplyid.MockServer.Handlers.Verifications do
 
       case validate_send_text_params(params) do
         :ok ->
-          {:ok, transaction} = State.create_transaction(params)
-          Responses.send_text_success(conn, transaction)
+          case State.create_transaction(params) do
+            {:ok, transaction} ->
+              Responses.send_text_success(conn, transaction)
+
+            {:error, _reason} ->
+              Responses.error(conn, 500, "internal_error", "Failed to create transaction")
+          end
 
         {:error, errors} ->
           Responses.validation_error(conn, errors)
@@ -34,8 +43,13 @@ defmodule Aplyid.MockServer.Handlers.Verifications do
       case State.get_transaction(id) do
         {:ok, transaction} ->
           if transaction.status == :created do
-            {:ok, updated} = State.update_transaction(id, %{status: :created})
-            Responses.resend_text_success(conn, updated)
+            case State.update_transaction(id, %{status: :created}) do
+              {:ok, updated} ->
+                Responses.resend_text_success(conn, updated)
+
+              _error ->
+                Responses.error(conn, 500, "internal_error", "Failed to update transaction")
+            end
           else
             Responses.error(
               conn,

@@ -31,10 +31,17 @@ defmodule Aplyid.MockServer.Webhook do
       payload = Responses.build_webhook_payload(transaction, "completed")
       webhook_auth = Keyword.get(config, :webhook_auth)
 
-      Task.Supervisor.start_child(
-        Aplyid.MockServer.TaskSupervisor,
-        fn -> send_webhook(webhook_url, payload, webhook_auth) end
-      )
+      case Task.Supervisor.start_child(
+             Aplyid.MockServer.TaskSupervisor,
+             fn -> send_webhook(webhook_url, payload, webhook_auth) end
+           ) do
+        {:ok, _pid} ->
+          :ok
+
+        {:error, reason} ->
+          Logger.error("Failed to start webhook delivery task: #{inspect(reason)}")
+          :ok
+      end
     end
 
     :ok
@@ -51,7 +58,7 @@ defmodule Aplyid.MockServer.Webhook do
 
     Logger.debug("Sending webhook to #{url}")
 
-    case Req.post(url, json: payload, headers: headers, retry: false) do
+    case Req.post(url, json: payload, headers: headers, retry: false, receive_timeout: 15_000) do
       {:ok, %{status: status}} when status in 200..299 ->
         Logger.debug("Webhook to #{url} succeeded with status #{status}")
         {:ok, status}

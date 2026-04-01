@@ -6,6 +6,8 @@ defmodule Aplyid.Client.Request do
   authentication and error handling.
   """
 
+  require Logger
+
   alias Aplyid.Client
 
   @type http_method :: :get | :post | :put | :patch | :delete
@@ -26,29 +28,55 @@ defmodule Aplyid.Client.Request do
       |> Keyword.put(:headers, headers)
       |> Keyword.merge(client.req_options)
 
+    Logger.debug("APLYiD API request: #{method |> to_string() |> String.upcase()} #{path}")
+
     case Req.request(req_opts) do
       {:ok, %{status: status, body: body}} when status in 200..299 ->
         {:ok, body}
 
       {:ok, %{status: 401}} ->
+        Logger.warning(
+          "APLYiD API request unauthorized: #{method |> to_string() |> String.upcase()} #{path}"
+        )
+
         {:error, :unauthorized}
 
       {:ok, %{status: 403}} ->
+        Logger.warning(
+          "APLYiD API request forbidden: #{method |> to_string() |> String.upcase()} #{path}"
+        )
+
         {:error, :forbidden}
 
       {:ok, %{status: 404}} ->
         {:error, :not_found}
 
       {:ok, %{status: 422, body: body}} ->
+        Logger.warning(
+          "APLYiD API validation error: #{method |> to_string() |> String.upcase()} #{path} — #{inspect(body)}"
+        )
+
         {:error, {:validation_error, body}}
 
       {:ok, %{status: status, body: body}} when status in 400..499 ->
+        Logger.warning(
+          "APLYiD API client error #{status}: #{method |> to_string() |> String.upcase()} #{path}"
+        )
+
         {:error, {:client_error, status, body}}
 
       {:ok, %{status: status, body: body}} when status in 500..599 ->
+        Logger.error(
+          "APLYiD API server error #{status}: #{method |> to_string() |> String.upcase()} #{path}"
+        )
+
         {:error, {:server_error, status, body}}
 
       {:error, reason} ->
+        Logger.error(
+          "APLYiD API request failed: #{method |> to_string() |> String.upcase()} #{path} — #{inspect(reason)}"
+        )
+
         {:error, {:request_failed, reason}}
     end
   end
