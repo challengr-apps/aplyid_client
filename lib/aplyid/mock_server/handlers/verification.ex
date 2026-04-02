@@ -19,122 +19,156 @@ defmodule Aplyid.MockServer.Handlers.Verification do
   GET /l/:id - Start verification flow (redirects to step 1)
   """
   def start(conn, id) do
-    with_transaction(conn, id, fn transaction ->
-      case transaction.status do
-        :created ->
-          redirect(conn, "/l/#{id}/consent")
+    case State.get_transaction(id) do
+      {:ok, transaction} ->
+        case transaction.status do
+          :created ->
+            redirect(conn, "/l/#{id}/consent")
 
-        :completed ->
-          render_html(conn, Views.already_completed(transaction, path_prefix(conn)))
+          :completed ->
+            render_html(conn, Views.already_completed(transaction, path_prefix(conn)))
 
-        _ ->
-          render_html(conn, Views.error("This transaction is no longer available."))
-      end
-    end)
+          _ ->
+            render_html(conn, Views.error("This transaction is no longer available."))
+        end
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   GET /l/:id/consent - Privacy consent screen
   """
   def consent(conn, id) do
-    with_transaction(conn, id, fn transaction ->
-      render_html(conn, Views.consent(transaction, path_prefix(conn)))
-    end)
+    case State.get_transaction(id) do
+      {:ok, transaction} ->
+        render_html(conn, Views.consent(transaction, path_prefix(conn)))
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   POST /l/:id/consent - Submit consent, go to capture
   """
   def submit_consent(conn, id) do
-    with_transaction(conn, id, fn _transaction ->
-      redirect(conn, "/l/#{id}/capture")
-    end)
+    case State.get_transaction(id) do
+      {:ok, _transaction} ->
+        redirect(conn, "/l/#{id}/capture")
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   GET /l/:id/capture - Capture photo ID screen
   """
   def capture(conn, id) do
-    with_transaction(conn, id, fn transaction ->
-      render_html(conn, Views.capture(transaction, path_prefix(conn)))
-    end)
+    case State.get_transaction(id) do
+      {:ok, transaction} ->
+        render_html(conn, Views.capture(transaction, path_prefix(conn)))
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   POST /l/:id/capture - Submit capture, go to reviewing
   """
   def submit_capture(conn, id) do
-    with_transaction(conn, id, fn _transaction ->
-      redirect(conn, "/l/#{id}/reviewing")
-    end)
+    case State.get_transaction(id) do
+      {:ok, _transaction} ->
+        redirect(conn, "/l/#{id}/reviewing")
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   GET /l/:id/reviewing - Reviewing ID data (loading screen)
   """
   def reviewing(conn, id) do
-    with_transaction(conn, id, fn transaction ->
-      render_html(conn, Views.reviewing(transaction, path_prefix(conn)))
-    end)
+    case State.get_transaction(id) do
+      {:ok, transaction} ->
+        render_html(conn, Views.reviewing(transaction, path_prefix(conn)))
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   GET /l/:id/details - Check ID details screen
   """
   def details(conn, id) do
-    with_transaction(conn, id, fn transaction ->
-      render_html(conn, Views.details(transaction, path_prefix(conn)))
-    end)
+    case State.get_transaction(id) do
+      {:ok, transaction} ->
+        render_html(conn, Views.details(transaction, path_prefix(conn)))
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   POST /l/:id/details - Submit details, go to face verification
   """
   def submit_details(conn, id) do
-    with_transaction(conn, id, fn _transaction ->
-      redirect(conn, "/l/#{id}/face")
-    end)
+    case State.get_transaction(id) do
+      {:ok, _transaction} ->
+        redirect(conn, "/l/#{id}/face")
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   GET /l/:id/face - Face verification screen
   """
   def face(conn, id) do
-    with_transaction(conn, id, fn transaction ->
-      render_html(conn, Views.face(transaction, path_prefix(conn)))
-    end)
+    case State.get_transaction(id) do
+      {:ok, transaction} ->
+        render_html(conn, Views.face(transaction, path_prefix(conn)))
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   POST /l/:id/face - Submit face, complete verification
   """
   def submit_face(conn, id) do
-    with_transaction(conn, id, fn _transaction ->
-      State.complete_transaction(id)
-      redirect(conn, "/l/#{id}/complete")
-    end)
+    case State.get_transaction(id) do
+      {:ok, _transaction} ->
+        State.complete_transaction(id)
+        redirect(conn, "/l/#{id}/complete")
+
+      :not_found ->
+        render_html(conn, Views.error("Transaction not found."))
+    end
   end
 
   @doc """
   GET /l/:id/complete - Verification complete screen
   """
   def complete(conn, id) do
-    with_transaction(conn, id, fn transaction ->
-      render_html(conn, Views.complete(transaction, path_prefix(conn)))
-    end)
-  end
-
-  # Helper functions
-
-  defp with_transaction(conn, id, fun) do
     case State.get_transaction(id) do
       {:ok, transaction} ->
-        fun.(transaction)
+        render_html(conn, Views.complete(transaction, path_prefix(conn)))
 
       :not_found ->
         render_html(conn, Views.error("Transaction not found."))
     end
   end
+
+  # Helper functions
 
   defp render_html(conn, html) do
     conn
