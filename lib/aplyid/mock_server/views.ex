@@ -369,15 +369,7 @@ defmodule Aplyid.MockServer.Views do
     """
   end
 
-  defp escape(value) when is_binary(value) do
-    value
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-    |> String.replace("\"", "&quot;")
-    |> String.replace("'", "&#39;")
-  end
-
+  defp escape(value) when is_binary(value), do: Plug.HTML.html_escape(value)
   defp escape(nil), do: ""
 
   defp css do
