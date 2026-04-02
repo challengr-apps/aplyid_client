@@ -26,6 +26,8 @@ defmodule Aplyid.Webhook.Plug do
 
   @behaviour Plug
 
+  require Logger
+
   import Plug.Conn
 
   @impl true
@@ -53,13 +55,19 @@ defmodule Aplyid.Webhook.Plug do
             conn |> send_resp(200, "") |> halt()
 
           {:error, :unauthorized} ->
+            Logger.warning("APLYiD webhook unauthorized: handler rejected event #{event_type}")
             unauthorized(conn)
 
-          {:error, _reason} ->
+          {:error, reason} ->
+            Logger.error(
+              "APLYiD webhook handler error for event #{event_type}: #{inspect(reason)}"
+            )
+
             conn |> send_resp(500, "") |> halt()
         end
       else
         {:error, :unauthorized} ->
+          Logger.warning("APLYiD webhook authorization failed for event #{event_type}")
           unauthorized(conn)
       end
     else

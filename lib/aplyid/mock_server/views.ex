@@ -291,7 +291,7 @@ defmodule Aplyid.MockServer.Views do
         </div>
 
         <h2>Error</h2>
-        <p class="description">#{message}</p>
+        <p class="description">#{escape(message)}</p>
       </div>
       """
     )
@@ -303,7 +303,7 @@ defmodule Aplyid.MockServer.Views do
        when is_binary(url) and url != "" do
     ~s"""
     <div class="redirect-link">
-      <a href="#{url}" class="btn btn-primary">Return to application</a>
+      <a href="#{escape(url)}" class="btn btn-primary">Return to application</a>
     </div>
     """
   end
@@ -315,9 +315,9 @@ defmodule Aplyid.MockServer.Views do
     last = (lastname || "Smith") |> String.upcase()
 
     %{
-      first_name: first,
+      first_name: escape(first),
       middle_name: "",
-      surname: last,
+      surname: escape(last),
       date_of_birth: "15/05/1990",
       id_number: "DL#{:rand.uniform(999_999_999)}",
       date_of_expiry: "15/05/2028"
@@ -329,6 +329,7 @@ defmodule Aplyid.MockServer.Views do
       if txn do
         [txn.firstname, txn.lastname]
         |> Enum.filter(& &1)
+        |> Enum.map(&escape/1)
         |> Enum.join(" ")
       else
         ""
@@ -367,6 +368,9 @@ defmodule Aplyid.MockServer.Views do
     </html>
     """
   end
+
+  defp escape(value) when is_binary(value), do: Plug.HTML.html_escape(value)
+  defp escape(nil), do: ""
 
   defp css do
     ~s"""

@@ -75,7 +75,7 @@ if Code.ensure_loaded?(Ecto) do
             |> Enum.map(fn
               {:status, v} when is_atom(v) -> {:status, to_string(v)}
               {k, v} when is_atom(k) -> {k, v}
-              {k, v} -> {String.to_existing_atom(k), v}
+              {k, v} when is_binary(k) -> {String.to_atom(k), v}
             end)
             |> Map.new()
 
