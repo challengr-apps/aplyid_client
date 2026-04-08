@@ -1,5 +1,7 @@
 import Config
 
+config :logger, level: :none
+
 config :aplyid,
   environments: [
     uat: [
@@ -19,6 +21,8 @@ config :aplyid, :mock_server,
   embedded: true,
   repo: Aplyid.TestRepo,
   base_url: "http://localhost:4000"
+
+config :aplyid, ecto_repos: [Aplyid.TestRepo]
 
 config :aplyid, Aplyid.TestRepo,
   username: "postgres",

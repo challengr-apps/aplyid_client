@@ -15,6 +15,8 @@ defmodule Aplyid.MockServer.Router do
   alias Aplyid.MockServer.Handlers.Verification
   alias Aplyid.MockServer.Responses
 
+  require Logger
+
   plug(Plug.Logger, log: :debug)
   plug(:match)
 
@@ -28,15 +30,18 @@ defmodule Aplyid.MockServer.Router do
 
   # Verification endpoints
   post "/api/v2/send_text" do
+    Logger.debug("AplyID Mock Server: Received send_text request")
     Verifications.send_text(conn)
   end
 
   put "/api/v2/resend_text/:transaction_id" do
+    Logger.debug("AplyID Mock Server: Received resend_text request for transaction: #{transaction_id}")
     Verifications.resend_text(conn, transaction_id)
   end
 
   # Simulation endpoints (for testing/development)
   post "/mock/simulate/complete/:id" do
+    Logger.debug("AplyID Mock Server: Received simulate complete request for transaction: #{id}")
     Simulation.complete(conn, id)
   end
 
