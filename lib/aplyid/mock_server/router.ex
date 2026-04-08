@@ -35,7 +35,10 @@ defmodule Aplyid.MockServer.Router do
   end
 
   put "/api/v2/resend_text/:transaction_id" do
-    Logger.debug("AplyID Mock Server: Received resend_text request for transaction: #{transaction_id}")
+    Logger.debug(
+      "AplyID Mock Server: Received resend_text request for transaction: #{transaction_id}"
+    )
+
     Verifications.resend_text(conn, transaction_id)
   end
 
